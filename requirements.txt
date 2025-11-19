@@ -1,0 +1,6 @@
+aiogram==3.13.1
+python-dotenv==1.0.1
+openai>=2.8.0
+matplotlib==3.9.0
+Pillow==10.4.0
+
