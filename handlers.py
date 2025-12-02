@@ -11,6 +11,7 @@ from db import (
     get_daily_calories, get_daily_water
 )
 from ai_service import analyze_food_text, analyze_food_photo, download_photo_from_telegram
+from visualization import generate_daily_chart, generate_monthly_chart
 from datetime import date
 
 router = Router()
@@ -717,6 +718,41 @@ async def process_calorie_correction(message: Message, state: FSMContext):
     except ValueError:
         await message.answer("Пожалуйста, введите корректное число калорий")
 
+
+@router.message(Command("статистика"))
+async def cmd_statistics(message: Message):
+    user_id = message.from_user.id
+    user_profile = get_user_profile(user_id)
+    
+    if not user_profile:
+        await message.answer("Сначала настройте профиль командой /set_profile")
+        return
+    
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.answer("Использование:\n/статистика день - график за сегодня\n/статистика месяц - график за текущий месяц")
+        return
+    
+    period = parts[1].lower()
+    
+    if period == "день":
+        chart = generate_daily_chart(user_id)
+        if chart:
+            photo = BufferedInputFile(chart.read(), filename="daily_stats.png")
+            await message.answer_photo(photo)
+        else:
+            await message.answer("Нет данных за сегодня")
+    
+    elif period == "месяц":
+        chart = generate_monthly_chart(user_id)
+        if chart:
+            photo = BufferedInputFile(chart.read(), filename="monthly_stats.png")
+            await message.answer_photo(photo)
+        else:
+            await message.answer("Нет данных за текущий месяц")
+    
+    else:
+        await message.answer("Используйте: /статистика день или /статистика месяц")
 
 def setup_handlers(dp):
     dp.include_router(router)
