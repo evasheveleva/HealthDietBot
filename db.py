@@ -8,7 +8,6 @@ def init_db():
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
 
-    # Таблица пользователей
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users(
             user_id INTEGER PRIMARY KEY,
@@ -19,11 +18,17 @@ def init_db():
             activity_level REAL,
             water_goal REAL,
             calorie_goal REAL,
+            goal_type TEXT DEFAULT 'maintain',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
-    # Таблица записей еды
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN goal_type TEXT DEFAULT 'maintain'")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS food_entries(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,7 +41,6 @@ def init_db():
         )
     """)
 
-    # Таблица записей воды
     cur.execute("""
         CREATE TABLE IF NOT EXISTS water_entries(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,13 +49,6 @@ def init_db():
             date DATE NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(user_id)
-        )
-    """)
-
-    # Таблица админов
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS admins(
-            user_id INTEGER PRIMARY KEY
         )
     """)
 
@@ -65,8 +62,8 @@ def save_user_to_db(user_id: int, user_data: dict):
     try:
         cur.execute('''
             INSERT OR REPLACE INTO users 
-            (user_id, gender, weight, height, age, activity_level, water_goal, calorie_goal) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (user_id, gender, weight, height, age, activity_level, water_goal, calorie_goal, goal_type) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             user_id,
             user_data.get("gender"),
@@ -75,7 +72,8 @@ def save_user_to_db(user_id: int, user_data: dict):
             user_data.get("age"),
             user_data.get("activity_level"),
             user_data.get("water_goal"),
-            user_data.get("calorie_goal")
+            user_data.get("calorie_goal"),
+            user_data.get("goal_type", "maintain")
         ))
         conn.commit()
     except Exception as e:
@@ -89,7 +87,7 @@ def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     cur.execute('''
-        SELECT gender, weight, height, age, activity_level, water_goal, calorie_goal
+        SELECT gender, weight, height, age, activity_level, water_goal, calorie_goal, goal_type
         FROM users WHERE user_id = ?
     ''', (user_id,))
     result = cur.fetchone()
@@ -103,7 +101,8 @@ def get_user_profile(user_id: int) -> Optional[Dict[str, Any]]:
             'age': result[3],
             'activity_level': result[4],
             'water_goal': result[5],
-            'calorie_goal': result[6]
+            'calorie_goal': result[6],
+            'goal_type': result[7] if result[7] else 'maintain'
         }
     return None
 
@@ -136,7 +135,6 @@ def delete_user_profile(user_id: int):
         if not cur.fetchone():
             return False
 
-        # Удаляем все записи пользователя
         cur.execute('DELETE FROM food_entries WHERE user_id = ?', (user_id,))
         cur.execute('DELETE FROM water_entries WHERE user_id = ?', (user_id,))
         cur.execute('DELETE FROM users WHERE user_id = ?', (user_id,))
@@ -225,8 +223,7 @@ def get_daily_water(user_id: int, entry_date: Optional[date] = None) -> float:
 def get_monthly_stats(user_id: int, year: int, month: int) -> Dict[str, List]:
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    
-    # Получаем калории по дням
+
     cur.execute('''
         SELECT date, COALESCE(SUM(calories), 0) as total_calories
         FROM food_entries
@@ -235,8 +232,7 @@ def get_monthly_stats(user_id: int, year: int, month: int) -> Dict[str, List]:
         ORDER BY date
     ''', (user_id, str(year), f"{month:02d}"))
     calories_data = cur.fetchall()
-    
-    # Получаем воду по дням
+
     cur.execute('''
         SELECT date, COALESCE(SUM(amount), 0) as total_water
         FROM water_entries
@@ -247,12 +243,25 @@ def get_monthly_stats(user_id: int, year: int, month: int) -> Dict[str, List]:
     water_data = cur.fetchall()
     
     conn.close()
+
+    calories_dict = {}
+    for row in calories_data:
+        date_val = row[0]
+        if isinstance(date_val, str):
+            date_key = date_val
+        else:
+            date_key = date_val.strftime('%Y-%m-%d') if hasattr(date_val, 'strftime') else str(date_val)
+        calories_dict[date_key] = row[1]
     
-    # Преобразуем в словари для удобства
-    calories_dict = {row[0]: row[1] for row in calories_data}
-    water_dict = {row[0]: row[1] for row in water_data}
-    
-    # Объединяем все даты
+    water_dict = {}
+    for row in water_data:
+        date_val = row[0]
+        if isinstance(date_val, str):
+            date_key = date_val
+        else:
+            date_key = date_val.strftime('%Y-%m-%d') if hasattr(date_val, 'strftime') else str(date_val)
+        water_dict[date_key] = row[1]
+
     all_dates = sorted(set(list(calories_dict.keys()) + list(water_dict.keys())))
     
     calories_list = [calories_dict.get(d, 0.0) for d in all_dates]
@@ -263,4 +272,3 @@ def get_monthly_stats(user_id: int, year: int, month: int) -> Dict[str, List]:
         'calories': calories_list,
         'water': water_list
     }
-
