@@ -1,5 +1,4 @@
 import matplotlib
-
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -12,14 +11,14 @@ from db import get_daily_calories, get_daily_water, get_monthly_stats, get_user_
 def generate_daily_chart(user_id: int, chart_date: Optional[date] = None) -> Optional[io.BytesIO]:
     if chart_date is None:
         chart_date = date.today()
-
+    
     calories = get_daily_calories(user_id, chart_date)
     water = get_daily_water(user_id, chart_date)
 
     user_profile = get_user_profile(user_id)
     if not user_profile:
         return None
-
+    
     calorie_goal = user_profile.get('calorie_goal', 0)
     water_goal = user_profile.get('water_goal', 0)
 
@@ -36,9 +35,9 @@ def generate_daily_chart(user_id: int, chart_date: Optional[date] = None) -> Opt
 
     for bar, value in zip(bars1, calories_data):
         height = bar.get_height()
-        ax1.text(bar.get_x() + bar.get_width() / 2., height,
-                 f'{int(value)}',
-                 ha='center', va='bottom', fontsize=11, fontweight='bold')
+        ax1.text(bar.get_x() + bar.get_width()/2., height,
+                f'{int(value)}',
+                ha='center', va='bottom', fontsize=11, fontweight='bold')
 
     water_data = [water, water_goal]
     colors_water = ['#4ECDC4', '#87CEEB']
@@ -49,17 +48,17 @@ def generate_daily_chart(user_id: int, chart_date: Optional[date] = None) -> Opt
 
     for bar, value in zip(bars2, water_data):
         height = bar.get_height()
-        ax2.text(bar.get_x() + bar.get_width() / 2., height,
-                 f'{int(value)}',
-                 ha='center', va='bottom', fontsize=11, fontweight='bold')
-
+        ax2.text(bar.get_x() + bar.get_width()/2., height,
+                f'{int(value)}',
+                ha='center', va='bottom', fontsize=11, fontweight='bold')
+    
     plt.tight_layout()
 
     buf = io.BytesIO()
     plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
     buf.seek(0)
     plt.close()
-
+    
     return buf
 
 
@@ -68,14 +67,13 @@ def generate_monthly_chart(user_id: int, year: Optional[int] = None, month: Opti
         today = date.today()
         year = today.year
         month = today.month
-
+    
     stats = get_monthly_stats(user_id, year, month)
-
+    
     if not stats['dates']:
         return None
 
-    dates = [datetime.strptime(d, '%Y-%m-%d') if isinstance(d, str) else datetime.combine(d, datetime.min.time()) for d
-             in stats['dates']]
+    dates = [datetime.strptime(d, '%Y-%m-%d') if isinstance(d, str) else datetime.combine(d, datetime.min.time()) for d in stats['dates']]
 
     fig, ax1 = plt.subplots(figsize=(12, 6))
 
@@ -98,17 +96,18 @@ def generate_monthly_chart(user_id: int, year: Optional[int] = None, month: Opti
 
     month_names = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
                    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
-    fig.suptitle(f'Статистика за {month_names[month - 1]} {year}', fontsize=16, fontweight='bold')
+    fig.suptitle(f'Статистика за {month_names[month-1]} {year}', fontsize=16, fontweight='bold')
 
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
     ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
-
+    
     plt.tight_layout()
 
     buf = io.BytesIO()
     plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
     buf.seek(0)
     plt.close()
-
+    
     return buf
+
